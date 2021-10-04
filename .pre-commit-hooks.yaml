@@ -1,0 +1,6 @@
+- id: numpydoc_lint
+  name: Run numpydoc.validate
+  description: Recursively run numpydoc.validate on entire packages.
+  entry: numpydoc_lint
+  language: python
+  pass_filenames: false
