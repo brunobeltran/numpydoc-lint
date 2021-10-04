@@ -3,6 +3,7 @@ import argparse
 import importlib
 import inspect
 import pkgutil
+import sys
 from functools import partial
 from pathlib import Path
 
@@ -68,7 +69,7 @@ def _all_results(args):
     return results
 
 
-if __name__ == "__main__":
+def _parse_args():
     parser = argparse.ArgumentParser(
         description="Check docstrings for compliance with numpydoc style."
     )
@@ -104,7 +105,23 @@ if __name__ == "__main__":
         default=list(),
         help="numpydoc error codes to ignore",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    """Run command-line application."""
+    args = _parse_args()
     results = _all_results(args)
+    no_errors = True
     for result in results:
+        if result.errors:
+            no_errors = False
         print(result)
+    if no_errors:
+        sys.exit(0)
+    else:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

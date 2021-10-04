@@ -26,4 +26,5 @@ class NumpydocReturn:
         if self.errors:
             return f"{prefix}{self.errors}"
         else:
-            return f"{prefix}No errors!"
+            # return f"{prefix}No errors!"
+            return ""
