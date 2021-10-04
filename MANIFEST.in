@@ -1,0 +1,2 @@
+include versioneer.py
+include numpydoc_lint/_version.py
