@@ -8,6 +8,8 @@ from pathlib import Path
 
 from numpydoc.validate import validate
 
+from . import NumpydocReturn
+
 
 def _defined_in_class(meth, cls):
     if inspect.ismethod(meth):
@@ -23,12 +25,47 @@ def _defined_in_class(meth, cls):
 
 
 def _class_submembers_r(cls):
-    for submember in inspect.getmembers(
+    for submember_name, submember in inspect.getmembers(
         cls, predicate=partial(_defined_in_class, cls=cls)
     ):
-        yield submember
+        yield submember_name, submember
         if inspect.isclass(submember):
             yield _class_submembers_r(submember)
+
+
+def _validate_name(name, args):
+    validate_results = validate(name)
+    validate_results["errors"] = [
+        (err_id, err_desc)
+        for err_id, err_desc in validate_results["errors"]
+        if err_id not in args.exclude_codes
+    ]
+    return NumpydocReturn(name=name, **validate_results)
+
+
+def _all_results(args):
+    results = []
+    for package_dir in args.packages:
+        for _, modname, _ in pkgutil.walk_packages(
+            [package_dir], prefix=Path(package_dir).name + "."
+        ):
+            if modname in args.exclude_modules:
+                continue
+            mod = importlib.import_module(modname)
+            for member_name, member in inspect.getmembers(
+                mod, lambda mem: inspect.getmodule(mem) == mod
+            ):
+                full_name = f"{modname}.{member_name}"
+                if full_name in args.exclude_members:
+                    continue
+                results.append(_validate_name(full_name, args))
+                if inspect.isclass(member):
+                    for submember_name, _ in _class_submembers_r(member):
+                        if submember_name in args.exclude_members:
+                            continue
+                        full_name = f"{modname}.{member_name}.{submember_name}"
+                        results.append(_validate_name(full_name, args))
+    return results
 
 
 if __name__ == "__main__":
@@ -38,6 +75,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--packages",
         type=str,
+        default=[],
         metavar="mod",
         nargs="+",
         help="package directory to recursive search for docstrings",
@@ -47,6 +85,7 @@ if __name__ == "__main__":
         type=str,
         metavar="func",
         nargs="+",
+        default=list(),
         help="functions to exclude from linting",
     )
     parser.add_argument(
@@ -54,23 +93,18 @@ if __name__ == "__main__":
         type=str,
         metavar="mod",
         nargs="+",
+        default=list(),
         help="modules to exclude from linting",
     )
+    parser.add_argument(
+        "--exclude-codes",
+        type=str,
+        metavar="errcode",
+        nargs="+",
+        default=list(),
+        help="numpydoc error codes to ignore",
+    )
     args = parser.parse_args()
-    print(args)
-
-    results = []
-    for package_dir in args.packages:
-        for _, modname, _ in pkgutil.walk_packages(
-            package_dir, prefix=Path(package_dir).name
-        ):
-            mod = importlib.import_module(modname)
-            for member in inspect.getmembers(
-                mod, lambda mem: inspect.getmodule(mem) == mod
-            ):
-                if inspect.isclass(member):
-                    for submember in _class_submembers_r(member):
-                        results.append(validate(submember))
-                else:
-                    results.append(validate(member))
-    print(results)
+    results = _all_results(args)
+    for result in results:
+        print(result)
